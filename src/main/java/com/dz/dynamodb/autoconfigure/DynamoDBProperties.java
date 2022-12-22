@@ -1,4 +1,4 @@
-package com.dz.ddeq.autoconfigure;
+package com.dz.dynamodb.autoconfigure;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
