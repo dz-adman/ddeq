@@ -19,9 +19,6 @@ To add the dependency in your project:
 compile "com.dz.dynamodb:ddconfig-spring-boot-starter:0.0.1-SNAPSHOT"
 ```
 
-> To disable the beans creation, set 
-> ```dynamodb.enabled``` property to ```false```
-> 
 ### application.properties
 ```
 dynamodb.endpoint=
@@ -37,4 +34,8 @@ dynamodb:
     accessKey:
     secretKey:
 ```
+<br>
 
+> To disable the beans creation, set
+> ```dynamodb.enabled``` property to ```false```
+> 
