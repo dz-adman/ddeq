@@ -1,6 +1,6 @@
 # dynamodb-autoconfiguration
 \
-Dynamo-DB Autoconfiguration for
+Dynamo-DB Spring-Boot AutoConfiguration for
 - **AmazonDynamDB** (Low-Level Interface)
 - **DynamoDB** (Document Interface)
 - **DynamoDBMapper** (Object persistance Interface)
