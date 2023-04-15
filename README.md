@@ -1,9 +1,7 @@
 # dynamodb-autoconfiguration
-\
+
 Dynamo-DB Spring-Boot AutoConfiguration for
-- **AmazonDynamDB** (Low-Level Interface)
-- **DynamoDB** (Document Interface)
-- **DynamoDBMapper** (Object persistance Interface)
+- **DynamoDbClient** (AWS SDK for Java 2.x)
 
 To add the dependency in your project:
 #### Maven
@@ -16,7 +14,7 @@ To add the dependency in your project:
 ```
 #### Gradle
 ```
-compile "com.dz.dynamodb:ddconfig-spring-boot-starter:0.0.1-SNAPSHOT"
+implementation "com.dz.dynamodb:ddconfig-spring-boot-starter:0.0.1-SNAPSHOT"
 ```
 
 ### application.properties
@@ -25,6 +23,8 @@ dynamodb.endpoint=
 dynamodb.region=
 dynamodb.accessKey=
 dynamodb.secretKey=
+dynamodb.apiCallTimeout=
+dynamodb.numRetries=
 ```
 ### application.yml
 ```
@@ -33,9 +33,11 @@ dynamodb:
     region:
     accessKey:
     secretKey:
+    apiCallTimeout:
+    numRetries:
 ```
 <br>
 
 > To disable the beans creation, set
 > ```dynamodb.enabled``` property to ```false```
-> 
+>

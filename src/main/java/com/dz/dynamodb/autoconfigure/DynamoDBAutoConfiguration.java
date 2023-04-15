@@ -1,65 +1,96 @@
 package com.dz.dynamodb.autoconfigure;
 
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.client.builder.AwsClientBuilder;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDB;
-import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClientBuilder;
-import com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapper;
-import com.amazonaws.services.dynamodbv2.document.DynamoDB;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
+import software.amazon.awssdk.core.retry.RetryPolicy;
+import software.amazon.awssdk.core.retry.backoff.BackoffStrategy;
+import software.amazon.awssdk.core.retry.conditions.RetryCondition;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.regions.providers.DefaultAwsRegionProviderChain;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+import software.amazon.awssdk.services.dynamodb.DynamoDbClientBuilder;
 
-@AutoConfiguration
+import java.net.URI;
+import java.time.Duration;
+
+/**
+ * Auto-configuration for Amazon DynamoDB, providing a bean for DynamoDbClient.
+ * This configuration class reads properties from the application configuration
+ * and sets up the DynamoDbClient with the specified settings.
+ */
+@Configuration
 @EnableConfigurationProperties(DynamoDBProperties.class)
-@ConditionalOnClass({AmazonDynamoDB.class, DynamoDB.class, DynamoDBMapper.class})
+@ConditionalOnClass(DynamoDbClient.class)
 @ConditionalOnProperty(prefix = "dynamodb", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class DynamoDBAutoConfiguration {
 
-    @Autowired
-    private DynamoDBProperties properties;
+    private final DynamoDBProperties properties;
 
     /**
-     * AmazonDynamoDB : Low-level interface
-     * @return {@link com.amazonaws.services.dynamodbv2.AmazonDynamoDB}
+     * Constructs a new DynamoDBAutoConfiguration instance with the given properties.
+     *
+     * @param properties the DynamoDBProperties instance containing the configuration settings
      */
-    @Bean
-    @ConditionalOnMissingBean
-    public AmazonDynamoDB amazonDynamoDB() {
-        AmazonDynamoDBClientBuilder builder = AmazonDynamoDBClientBuilder.standard();
-        if (StringUtils.hasText(properties.getEndpoint())) {
-            builder.setEndpointConfiguration(new AwsClientBuilder.EndpointConfiguration(properties.getEndpoint(), properties.getRegion()));
-        } else if (StringUtils.hasText(properties.getRegion()))
-            builder.setRegion(properties.getRegion());
-        if (StringUtils.hasText(properties.getAccessKey()) && StringUtils.hasText(properties.getSecretKey())) {
-            builder.setCredentials(new AWSStaticCredentialsProvider(new BasicAWSCredentials(properties.getAccessKey(), properties.getSecretKey())));
-        }
-        return builder.build();
+    public DynamoDBAutoConfiguration(DynamoDBProperties properties) {
+        this.properties = properties;
     }
 
     /**
-     * DynamoDB : Document interface
-     * @param amazonDynamoDB
-     * @return {@link com.amazonaws.services.dynamodbv2.document.DynamoDB}
+     * Creates a new DynamoDbClient bean with the specified settings from the DynamoDBProperties.
+     * If a bean of the same type already exists, this method will not be called.
+     *
+     * @return a new DynamoDbClient instance
      */
     @Bean
     @ConditionalOnMissingBean
-    public DynamoDB dynamoDB(AmazonDynamoDB amazonDynamoDB) { return new DynamoDB(amazonDynamoDB); }
+    public DynamoDbClient dynamoDbClient() {
+        DynamoDbClientBuilder builder = DynamoDbClient.builder();
 
-    /**
-     * DynamoDBMapper : Object persistence interface
-     * @param amazonDynamoDB
-     * @return {@link com.amazonaws.services.dynamodbv2.datamodeling.DynamoDBMapper}
-     */
-    @Bean
-    @ConditionalOnMissingBean
-    public DynamoDBMapper dynamoDBMapper(AmazonDynamoDB amazonDynamoDB) {
-        return new DynamoDBMapper(amazonDynamoDB);
+        if (StringUtils.hasText(properties.getEndpoint())) {
+            builder.endpointOverride(URI.create(properties.getEndpoint()));
+        }
+
+        if (StringUtils.hasText(properties.getRegion())) {
+            builder.region(Region.of(properties.getRegion()));
+        } else {
+            builder.region(new DefaultAwsRegionProviderChain().getRegion());
+        }
+
+        if (StringUtils.hasText(properties.getAccessKey()) && StringUtils.hasText(properties.getSecretKey())) {
+            builder.credentialsProvider(StaticCredentialsProvider.create(AwsBasicCredentials.create(properties.getAccessKey(), properties.getSecretKey())));
+        } else {
+            builder.credentialsProvider(DefaultCredentialsProvider.create());
+        }
+
+        // Use UrlConnectionHttpClient for better compatibility with Java 17 (the default Apache Http client has been removed since Java 11)
+        builder.httpClientBuilder(UrlConnectionHttpClient.builder());
+
+        ClientOverrideConfiguration.Builder overrideConfigurationBuilder = ClientOverrideConfiguration.builder();
+
+        if (properties.getApiCallTimeout() != null) {
+            overrideConfigurationBuilder.apiCallTimeout(Duration.ofSeconds(properties.getApiCallTimeout()));
+        }
+
+        if (properties.getNumRetries() != null) {
+            RetryPolicy.Builder retryPolicyBuilder = RetryPolicy.builder()
+                    .numRetries(properties.getNumRetries())
+                    .retryCondition(RetryCondition.defaultRetryCondition())
+                    .backoffStrategy(BackoffStrategy.defaultThrottlingStrategy());
+            overrideConfigurationBuilder.retryPolicy(retryPolicyBuilder.build());
+        }
+
+        builder.overrideConfiguration(overrideConfigurationBuilder.build());
+
+        return builder.build();
     }
 }
